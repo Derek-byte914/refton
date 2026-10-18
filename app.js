@@ -28,11 +28,13 @@ $('reset').onclick=()=>{stopPlayback(true);params={...DEFAULT};preset='clean';by
 $('play').onclick=()=>{if(playing)stopPlayback();else playAt(offset>=end?start:offset).catch(()=>status('unsupported',true))};$('stop').onclick=()=>stopPlayback(true);$('repeat').onclick=()=>{repeatEnabled=!repeatEnabled;syncUI()};
 $('bypass').onclick=()=>{bypassed=!bypassed;if(active)active.graph.update(params,bypassed);syncUI()};
 function beginSeek(){if(!buffer||busy||seekSession)return;seekSession={resume:playing,changed:false};if(playing)stopPlayback()}
-$('seek').addEventListener('pointerdown',beginSeek);
+function updateSeekFromPointer(e){const seek=$('seek'),rect=seek.getBoundingClientRect(),thumb=9,usable=Math.max(1,rect.width-thumb*2),ratio=Math.max(0,Math.min(1,(e.clientX-rect.left-thumb)/usable)),min=+$('seek').min,max=+$('seek').max;seek.value=String(min+ratio*(max-min));seek.dispatchEvent(new Event('input',{bubbles:true}))}
+$('seek').addEventListener('pointerdown',e=>{beginSeek();if(!seekSession)return;e.preventDefault();$('seek').focus({preventScroll:true});try{$('seek').setPointerCapture(e.pointerId)}catch{}updateSeekFromPointer(e)});
+$('seek').addEventListener('pointermove',e=>{if(seekSession&&$('seek').hasPointerCapture?.(e.pointerId)){e.preventDefault();updateSeekFromPointer(e)}});
 $('seek').addEventListener('keydown',e=>{if(['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','Home','End','PageUp','PageDown'].includes(e.key))beginSeek()});
 $('seek').oninput=e=>{beginSeek();if(!seekSession)return;offset=Math.max(start,Math.min(end,+e.target.value));seekSession.changed=true;paintWave()};
 function finishSeek(){if(!seekSession)return;const session=seekSession;seekSession=null;if(session.changed&&session.resume&&offset<end)playAt(offset).catch(()=>status('unsupported',true));else paintWave()}
-$('seek').onchange=finishSeek;$('seek').addEventListener('pointerup',finishSeek);$('seek').addEventListener('pointercancel',finishSeek);
+$('seek').onchange=finishSeek;$('seek').addEventListener('pointerup',e=>{if($('seek').hasPointerCapture?.(e.pointerId))$('seek').releasePointerCapture(e.pointerId);finishSeek()});$('seek').addEventListener('pointercancel',finishSeek);
 function changeTrim(){const a=+$('trimStart').value,b=+$('trimEnd').value;if(!Number.isFinite(a)||!Number.isFinite(b)||a<0||b>buffer.duration+.001||b-a<.1){status('invalidTrim',true);$('trimStart').value=start.toFixed(3);$('trimEnd').value=end.toFixed(3);return}stopPlayback();start=a;end=Math.min(b,buffer.duration);offset=start;$('seek').min=start;$('seek').max=end;setDirty();clearDownload();syncUI();paintWave()}
 $('trimStart').onchange=$('trimEnd').onchange=changeTrim;
 $('exportName').oninput=()=>{setDirty();clearDownload()};document.querySelectorAll('[name=format]').forEach(e=>e.onchange=()=>{clearDownload();syncUI()});$('quality').onchange=$('normalize').onchange=clearDownload;
